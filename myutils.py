@@ -1,23 +1,30 @@
 import requests as rq
-import json
+import json as js
 import os
 import pandas as pd
 import osmnx as ox
 import numpy as np
-import random
+import random as rd
+from ast import literal_eval
 
-DATA_BASE = "data"
-TIMETABLE_FILE = "timetable"
-DF_FILE = "df"
-STOPS_FILE = "stops"
-PATHS_FILE = "paths"
-FILE_EXT = ".json"
+PATH_ROOT = os.getcwd() + os.path.sep + "data"
+GRAPH_FILE_PATH = PATH_ROOT+ os.path.sep + "hcm.graphml"
+
+TIMETABLE_FILE_NAME = "timetable"
+DF_FILE_NAME = "df"
+STOPS_FILE_NAME = "stops"
+PATHS_FILE_NAME = "paths"
+TRIPS_FILE_NAME = "paths"
+
+JSON_EXT = ".json"
+CSV_EXT = ".csv"
 
 ROUTE_API = lambda id: f"http://apicms.ebms.vn/businfo/getroutebyid/{id}"
 TIMETABLE_API = lambda route: f"http://apicms.ebms.vn/businfo/gettimetablebyroute/{route}"
 ROUTEVAR_API = lambda route: f"http://apicms.ebms.vn/businfo/getvarsbyroute/{route}"
 STOPS_API = lambda id, varId: f"http://apicms.ebms.vn/businfo/getstopsbyvar/{id}/{varId}"
 PATHS_API = lambda id, varId: f"http://apicms.ebms.vn/businfo/getpathsbyvar/{id}/{varId}"
+TRIPS_API = lambda id, tripId: f"http://apicms.ebms.vn/businfo/gettripsbytimetable/{id}/{tripId}"
 
 utn = ox.settings.useful_tags_node
 oxna = ox.settings.osm_xml_node_attrs
@@ -33,9 +40,9 @@ ox.settings.useful_tags_way = utw
 ox.settings.timeout=1200
 
 def save_path_data(route, var, df):
-    source = DF_FILE + str(var) + ".csv"
-    dir_path = os.path.join(os.getcwd(), DATA_BASE, str(route))
-    file_path = os.path.join(os.getcwd(), DATA_BASE, str(route), source)
+    source = DF_FILE_NAME + str(var) + CSV_EXT
+    dir_path = os.path.join(PATH_ROOT, str(route))
+    file_path = os.path.join(PATH_ROOT, str(route), source)
 
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -43,18 +50,21 @@ def save_path_data(route, var, df):
     df.to_csv(file_path, index=False, encoding="utf-8")
 
 
-def load_path_data(route, source):
-    source += ".csv"
-    file_path = os.path.join(os.getcwd(), DATA_BASE, str(route), source)
+def load_path_data(route, source, eval_columns):
+    source += CSV_EXT
+    file_path = os.path.join(PATH_ROOT, str(route), source)
     if not os.path.exists(file_path):
         assert FileNotFoundError
-    return pd.read_csv(file_path, encoding="utf-8")
+    df = pd.read_csv(file_path, encoding="utf-8")
+    for col in eval_columns:
+        df[col] = df[col].apply(literal_eval)
+    return df
     
 
 def load_data(route, source, api):
-    source += FILE_EXT
-    dir_path = os.path.join(os.getcwd(), DATA_BASE, str(route))
-    file_path = os.path.join(os.getcwd(), DATA_BASE, str(route), source)
+    source += JSON_EXT
+    dir_path = os.path.join(PATH_ROOT, str(route))
+    file_path = os.path.join(PATH_ROOT, str(route), source)
 
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -62,19 +72,18 @@ def load_data(route, source, api):
     if not os.path.exists(file_path):
         response = rq.get(api)
         with open(file_path, "w+", encoding="utf-8") as f:
-            string = json.dumps(response.json(), ensure_ascii=False)
+            string = js.dumps(response.json(), ensure_ascii=False)
             f.write(string)
             
     return pd.read_json(file_path, encoding="utf-8")
 
 
 def load_map():
-    HCM_NETWORK = "./data/hcm.graphml"
-    if not os.path.exists(HCM_NETWORK):
+    if not os.path.exists(GRAPH_FILE_PATH):
         G = ox.graph_from_place("Ho Chi Minh City", retain_all=True, truncate_by_edge=True, buffer_dist=1000)
-        ox.save_graphml(G, HCM_NETWORK)
+        ox.save_graphml(G, GRAPH_FILE_PATH)
     else:
-        G = ox.load_graphml(HCM_NETWORK)
+        G = ox.load_graphml(GRAPH_FILE_PATH)
     ox.add_edge_speeds(G)
     ox.add_edge_travel_times(G)
     return G
@@ -144,7 +153,7 @@ def graph_folium_all_routes(buses, G):
     for bus in buses:
         for _, path in bus.paths_df.items():
             routes = path["route"]
-            r = lambda: random.randint(0,255)
+            r = lambda: rd.randint(0,255)
             color = f"#{r():02x}{r():02x}{r():02x}"
             for route in routes:
                 try: route_map = ox.plot_route_folium(G, route, route_map, color=color, tiles="openstreetmap", zoom=5)
@@ -158,11 +167,11 @@ def graph_all_routes(buses, G):
     for bus in buses:
         for _, path in bus.paths_df.items():
             routes = path["route"]
-            r = lambda: random.randint(0,255)
+            r = lambda: rd.randint(0,255)
             color = f"#{r():02x}{r():02x}{r():02x}"
             if ax == None:
-                fig, ax = ox.plot_graph_routes(G, routes, route_colors=color, route_linewidths=10, orig_dest_size=1, node_size=0, edge_linewidth=1, show=False)
+                fig, ax = ox.plot_graph_routes(G, routes, route_colors=color, route_linewidths=1, orig_dest_size=1, node_size=0, edge_linewidth=1, show=False)
             else:
-                fig, ax = ox.plot_graph_routes(G, routes, route_colors=color, route_linewidths=10, ax=ax, orig_dest_size=1, node_size=0, edge_linewidth=1, show=False)
+                fig, ax = ox.plot_graph_routes(G, routes, route_colors=color, route_linewidths=1, ax=ax, orig_dest_size=1, node_size=0, edge_linewidth=1, show=False)
     return fig, ax
 
