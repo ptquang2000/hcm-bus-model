@@ -14,7 +14,7 @@ TIMETABLE_FILE_NAME = "timetable"
 DF_FILE_NAME = "df"
 STOPS_FILE_NAME = "stops"
 PATHS_FILE_NAME = "paths"
-TRIPS_FILE_NAME = "paths"
+TRIPS_FILE_NAME = "trips"
 
 JSON_EXT = ".json"
 CSV_EXT = ".csv"
